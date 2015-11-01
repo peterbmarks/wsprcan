@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <getopt.h> // needed for C99
 
 #include "wsprsim_utils.h"
 #include "wsprd_utils.h"
@@ -111,6 +112,7 @@ unsigned long writec2file(char *c2filename, int trmin, double freq
     }
     
     nwrite = fwrite(buffer, sizeof(float), 2*45000, fp);
+    fclose(fp);
     if( nwrite == 2*45000 ) {
         return nwrite;
     } else {
@@ -126,12 +128,18 @@ int main(int argc, char *argv[])
     extern int optind;
     int i, c, printchannel=0, writec2=0;
     float snr=50.0;
-    char *message, *c2filename, *hashtab;
+    char message[23];
+    char c2filename[16];
+    char *hashtab;
     hashtab=malloc(sizeof(char)*32768*13);
-    c2filename=malloc(sizeof(char)*15);
+    if(hashtab==NULL){
+		printf("malloc for hashtab failed");
+		return 1;
+    }
+
 
     // message length is 22 characters
-    message=malloc(sizeof(char)*23);
+
     
     strcpy(c2filename,"000000_0001.c2");
 
@@ -146,7 +154,7 @@ int main(int argc, char *argv[])
                 printdata=1;
                 break;
             case 'o':
-                c2filename = optarg;
+                strncpy(c2filename,optarg,16);
                 writec2=1;
                 break;
             case 's':
@@ -157,13 +165,20 @@ int main(int argc, char *argv[])
     
     if( optind+1 > argc ) {
         usage();
+		free(hashtab);
         return 0;
     } else {
-        message=argv[optind];
+        strncpy(message,argv[optind],23);
     }
     
     unsigned char channel_symbols[162];
-    get_wspr_channel_symbols(message, hashtab, channel_symbols);
+    if(!get_wspr_channel_symbols(message, hashtab, channel_symbols)){
+		usage();
+		free(hashtab);
+		return 0;
+	}
+	free(hashtab);
+
     
     if( printchannel ) {
         printf("Channel symbols:\n");

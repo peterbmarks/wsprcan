@@ -26,7 +26,7 @@
  You should have received a copy of the GNU General Public License
  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-
+#include <getopt.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -74,6 +74,9 @@ unsigned long readc2file(char *ptr_to_infile, double *idat, double *qdat,
     FILE* fp;
     
     buffer=malloc(sizeof(float)*2*65536);
+	if(buffer==NULL){
+        return 1;
+}
     memset(buffer,0,sizeof(float)*2*65536);
     
     fp = fopen(ptr_to_infile,"rb");
@@ -93,7 +96,7 @@ unsigned long readc2file(char *ptr_to_infile, double *idat, double *qdat,
         idat[i]=buffer[2*i];
         qdat[i]=-buffer[2*i+1];
     }
-    
+    free(buffer);
     if( nread == 2*45000 ) {
         return nread/2;
     } else {
@@ -105,7 +108,8 @@ unsigned long readc2file(char *ptr_to_infile, double *idat, double *qdat,
 unsigned long readwavfile(char *ptr_to_infile, int ntrmin, double *idat, double *qdat )
 {
     unsigned long i, j, npoints;
-    int nfft1, nfft2, nh2, i0;
+    unsigned int nfft1, nfft2, nh2;
+    int i0;
     double df;
     
     nfft2=46080; //this is the number of downsampled points that will be returned
@@ -132,6 +136,9 @@ unsigned long readwavfile(char *ptr_to_infile, int ntrmin, double *idat, double 
     FILE *fp;
     short int *buf2;
     buf2 = malloc(npoints*sizeof(short int));
+    if(buf2==NULL){
+        return 1;
+    }
     
     fp = fopen(ptr_to_infile,"rb");
     if (fp == NULL) {
@@ -140,7 +147,13 @@ unsigned long readwavfile(char *ptr_to_infile, int ntrmin, double *idat, double 
     }
     nr=fread(buf2,2,22,fp);            //Read and ignore header
     nr=fread(buf2,2,npoints,fp);       //Read raw data
+
     fclose(fp);
+    if(nr!=npoints){
+		printf("Failed to read data file\n");
+		printf("requested: %lu got: %lu\n",npoints,nr);
+		return 1;
+	}
     
     realin=(double*) fftw_malloc(sizeof(double)*nfft1);
     fftout=(fftw_complex*) fftw_malloc(sizeof(fftw_complex)*nfft1);
@@ -390,10 +403,12 @@ void subtract_signal(double *id, double *qd, long np,
  *******************************************************************************/
 void subtract_signal2(double *id, double *qd, long np,
                       double f0, int shift0, double drift0, unsigned char* channel_symbols)
+#define NFILT 256
 {
     double dt=1.0/375.0, df=375.0/256.0;
     double pi=4.*atan(1.0), twopidt, phi=0, dphi, cs;
-    int i, j, k, ii, nsym=162, nspersym=256,  nfilt=256; //nfilt must be even number.
+    int i, j, k, ii, nsym=162, nspersym=256;
+    //NFILT must be even number.
     int nsig=nsym*nspersym;
     int nc2=45000;
     
@@ -405,7 +420,9 @@ void subtract_signal2(double *id, double *qd, long np,
     cq=malloc(sizeof(double)*nc2);
     cfi=malloc(sizeof(double)*nc2);
     cfq=malloc(sizeof(double)*nc2);
-    
+    if(refi==NULL || refq==NULL || ci==NULL || cq==NULL || cfi==NULL || cfq==NULL){
+	goto fail;
+    }
     memset(refi,0,sizeof(double)*nc2);
     memset(refq,0,sizeof(double)*nc2);
     memset(ci,0,sizeof(double)*nc2);
@@ -446,65 +463,66 @@ void subtract_signal2(double *id, double *qd, long np,
     // s(t) * conjugate(r(t))
     // beginning of first symbol in reference signal is at i=0
     // beginning of first symbol in received data is at shift0.
-    // filter transient lasts nfilt samples
-    // leave nfilt zeros as a pad at the beginning of the unfiltered reference signal
+    // filter transient lasts NFILT samples
+    // leave NFILT zeros as a pad at the beginning of the unfiltered reference signal
     for (i=0; i<nsym*nspersym; i++) {
         k=shift0+i;
         if( (k>0) && (k<np) ) {
-            ci[i+nfilt] = id[k]*refi[i] + qd[k]*refq[i];
-            cq[i+nfilt] = qd[k]*refi[i] - id[k]*refq[i];
+            ci[i+ NFILT] = id[k]*refi[i] + qd[k]*refq[i];
+            cq[i+ NFILT] = qd[k]*refi[i] - id[k]*refq[i];
         }
     }
     
     //quick and dirty filter - may want to do better
-    double w[nfilt], norm=0, partialsum[nfilt];
-    memset(partialsum,0,sizeof(double)*nfilt);
-    for (i=0; i<nfilt; i++) {
-        w[i]=sin(pi*(double)i/(double)(nfilt-1));
+    double w[NFILT], norm=0, partialsum[NFILT];
+    memset(partialsum,0,sizeof(double)* NFILT);
+    for (i=0; i< NFILT; i++) {
+        w[i]=sin(pi*(double)i/(double)(NFILT -1));
         norm=norm+w[i];
     }
-    for (i=0; i<nfilt; i++) {
+    for (i=0; i< NFILT; i++) {
         w[i]=w[i]/norm;
     }
-    for (i=1; i<nfilt; i++) {
+    for (i=1; i< NFILT; i++) {
         partialsum[i]=partialsum[i-1]+w[i];
     }
     
     // LPF
-    for (i=nfilt/2; i<45000-nfilt/2; i++) {
+    for (i= NFILT /2; i<45000- NFILT /2; i++) {
         cfi[i]=0.0; cfq[i]=0.0;
-        for (j=0; j<nfilt; j++) {
-            cfi[i]=cfi[i]+w[j]*ci[i-nfilt/2+j];
-            cfq[i]=cfq[i]+w[j]*cq[i-nfilt/2+j];
+        for (j=0; j< NFILT; j++) {
+            cfi[i]=cfi[i]+w[j]*ci[i- NFILT /2+j];
+            cfq[i]=cfq[i]+w[j]*cq[i- NFILT /2+j];
         }
     }
     
     // subtract c(t)*r(t) here
     // (ci+j*cq)(refi+j*refq)=(ci*refi-cq*refq)+j(ci*refq)+cq*refi)
-    // beginning of first symbol in reference signal is at i=nfilt
+    // beginning of first symbol in reference signal is at i=NFILT
     // beginning of first symbol in received data is at shift0.
     for (i=0; i<nsig; i++) {
-        if( i<nfilt/2 ) {        // take care of the end effect (LPF step response) here
-            norm=partialsum[nfilt/2+i];
-        } else if( i>(nsig-1-nfilt/2) ) {
-            norm=partialsum[nfilt/2+nsig-1-i];
+        if( i< NFILT /2 ) {        // take care of the end effect (LPF step response) here
+            norm=partialsum[NFILT /2+i];
+        } else if( i>(nsig-1- NFILT /2) ) {
+            norm=partialsum[NFILT /2+nsig-1-i];
         } else {
             norm=1.0;
         }
         k=shift0+i;
-        j=i+nfilt;
+        j=i+ NFILT;
         if( (k>0) && (k<np) ) {
             id[k]=id[k] - (cfi[j]*refi[i]-cfq[j]*refq[i])/norm;
             qd[k]=qd[k] - (cfi[j]*refq[i]+cfq[j]*refi[i])/norm;
         }
     }
-    
-    free(refi);
-    free(refq);
-    free(ci);
-    free(cq);
-    free(cfi);
-    free(cfq);
+
+    fail:
+        free(refi);
+        free(refq);
+        free(ci);
+        free(cq);
+        free(cfi);
+        free(cfq);
 
     return;
 }
@@ -515,6 +533,9 @@ unsigned long writec2file(char *c2filename, int trmin, double freq
     int i;
     double *buffer;
     buffer=malloc(sizeof(double)*2*45000);
+	if(buffer==NULL){
+        return 1;
+	}
     memset(buffer,0,sizeof(double)*2*45000);
     
     FILE *fp;
@@ -535,10 +556,10 @@ unsigned long writec2file(char *c2filename, int trmin, double freq
     }
     
     nwrite = fwrite(buffer, sizeof(double), 2*45000, fp);
+    free(buffer);
     if( nwrite == 2*45000 ) {
         return nwrite;
     } else {
-        free(buffer);
         return 0;
     }
 }
@@ -572,7 +593,7 @@ int main(int argc, char *argv[])
     extern char *optarg;
     extern int optind;
     int i,j,k;
-    unsigned char *symbols, *decdata, *channel_symbols;
+    unsigned char *symbols, *channel_symbols;
     signed char message[]={-9,13,-35,123,57,-39,64,0,0,0,0};
     char *callsign, *call_loc_pow;
     char *ptr_to_infile,*ptr_to_infile_suffix;
@@ -608,15 +629,20 @@ int main(int argc, char *argv[])
 //    char hashtab[32768][13];
     char *hashtab;
     hashtab=malloc(sizeof(char)*32768*13);
+
     memset(hashtab,0,sizeof(char)*32768*13);
     int nh;
     symbols=malloc(sizeof(char)*nbits*2);
-    decdata=malloc(sizeof(char)*11);
+    unsigned char decdata[11]={0};
+	
     channel_symbols=malloc(sizeof(char)*nbits*2);
+	
 //    unsigned char channel_symbols[162];
 
     callsign=malloc(sizeof(char)*13);
+	
     call_loc_pow=malloc(sizeof(char)*23);
+	
     double allfreqs[100];
     char allcalls[100][13];
     memset(allfreqs,0,sizeof(double)*100);
@@ -643,6 +669,13 @@ int main(int argc, char *argv[])
     
     idat=malloc(sizeof(double)*maxpts);
     qdat=malloc(sizeof(double)*maxpts);
+	if(qdat==NULL || idat==NULL){
+		free(idat);
+		free(qdat);
+		return 1;
+    }
+    memset(qdat,0,sizeof(double)*maxpts);
+    memset(idat,0,sizeof(double)*maxpts);
     
     while ( (c = getopt(argc, argv, "a:cC:de:f:HJmqstwvz:")) !=-1 ) {
         switch (c) {
@@ -763,7 +796,7 @@ int main(int argc, char *argv[])
         dialfreq=dialfreq_cmdline - (dialfreq_error*1.0e-06);
     } else if ( strstr(ptr_to_infile,".c2") !=0 )  {
         ptr_to_infile_suffix=strstr(ptr_to_infile,".c2");
-        npoints=readc2file(ptr_to_infile, idat, qdat, &dialfreq, &wspr_type);
+        npoints= readc2file(ptr_to_infile, idat, qdat, &dialfreq, &wspr_type);
         if( npoints == 1 ) {
             return 1;
         }
@@ -785,8 +818,16 @@ int main(int argc, char *argv[])
     fftin=(fftw_complex*) fftw_malloc(sizeof(fftw_complex)*512);
     fftout=(fftw_complex*) fftw_malloc(sizeof(fftw_complex)*512);
     PLAN3 = fftw_plan_dft_1d(512, fftin, fftout, FFTW_FORWARD, PATIENCE);
-    
-    double ps[512][nffts];
+
+
+
+
+    double **ps=malloc(sizeof(double*)*512);
+    for(i=0;i<512;i++){
+        ps[i]=malloc(sizeof(double)*359);
+        memset(ps[i],0,sizeof(double)*359);
+    }
+
     double w[512];
     for(i=0; i<512; i++) {
         w[i]=sin(0.006147931*i);
@@ -811,7 +852,7 @@ int main(int argc, char *argv[])
         if( ipass > 0 && ndecodes_pass == 0 ) break;
         ndecodes_pass=0;
         
-        memset(ps,0.0, sizeof(double)*512*nffts);
+        
         for (i=0; i<nffts; i++) {
             for(j=0; j<512; j++ ) {
                 k=i*128+j;
@@ -974,7 +1015,7 @@ int main(int argc, char *argv[])
                         for (k=0; k<162; k++) {                             //Sum over symbols
                             ifd=ifr+((double)k-81.0)/81.0*( (double)idrift )/(2.0*df);
                             kindex=k0+2*k;
-                            if( kindex < nffts ) {
+                            if(kindex >=0 && kindex < nffts ) {
                                 p0=ps[ifd-3][kindex];
                                 p1=ps[ifd-1][kindex];
                                 p2=ps[ifd+1][kindex];
@@ -1200,10 +1241,19 @@ int main(int argc, char *argv[])
             int wsprtype=2;
             strcpy(c2filename,"000000_0001.c2");
             printf("Writing %s\n",c2filename);
-            writec2file(c2filename, wsprtype, carrierfreq, idat, qdat);
+            if(writec2file(c2filename, wsprtype, carrierfreq, idat, qdat)){
+                return 3;
+            }
         }
     }
-
+    free(idat);
+    free(qdat);
+    free(callsign);
+    free(call_loc_pow);
+    for(i=0;i<512;i++){
+        free(ps[i]);
+    }
+    free(ps);
     // sort the result in order of increasing frequency
     struct result temp;
     for (j = 1; j <= uniques - 1; j++) {
@@ -1242,6 +1292,7 @@ int main(int argc, char *argv[])
     if ((fp_fftw_wisdom_file = fopen(wisdom_fname, "w"))) {
         fftw_export_wisdom_to_file(fp_fftw_wisdom_file);
         fclose(fp_fftw_wisdom_file);
+        fftw_forget_wisdom();
     }
 
     ttotal += (double)(clock()-t00)/CLOCKS_PER_SEC;
@@ -1282,7 +1333,12 @@ int main(int argc, char *argv[])
     if( stackdecoder ) {
         free(stack);
     }
-    
+
+    free(channel_symbols);
+    free(symbols);
+
+    free(hashtab);
     if(writenoise == 999) return -1;  //Silence compiler warning
     return 0;
+
 }

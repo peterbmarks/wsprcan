@@ -187,11 +187,11 @@ int get_wspr_channel_symbols(char* rawmessage, char* hashtab, unsigned char* sym
         i++;
     }
     
-    int i1=strcspn(message," ");
-    int i2=strcspn(message,"/");
-    int i3=strcspn(message,"<");
-    int i4=strcspn(message,">");
-    int mlen=strlen(message);
+    unsigned int i1=strcspn(message," ");
+    unsigned int i2=strcspn(message,"/");
+    unsigned int i3=strcspn(message,"<");
+    unsigned int i4=strcspn(message,">");
+    unsigned int mlen=strlen(message);
     
     // Use the presence and/or absence of "<" and "/" to decide what
     // type of message. No sanity checks! Beware!
@@ -297,7 +297,7 @@ int get_wspr_channel_symbols(char* rawmessage, char* hashtab, unsigned char* sym
 //    printf("Will decode as: %s\n",check_call_loc_pow);
     
     unsigned int nbytes=11; // The message with tail is packed into 11 bytes.
-    unsigned int nencoded=162;
+    unsigned int nencoded=172;
     unsigned char channelbits[nencoded];
     memset(channelbits,0,sizeof(char)*nencoded);
     
@@ -308,6 +308,8 @@ int get_wspr_channel_symbols(char* rawmessage, char* hashtab, unsigned char* sym
     for (i=0; i<162; i++) {
         symbols[i]=2*channelbits[i]+pr3[i];
     }
-    
+
+    free(check_callsign);
+    free(check_call_loc_pow);
     return 1;
 }

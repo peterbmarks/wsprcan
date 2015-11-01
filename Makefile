@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS= -I/usr/local/include -Wall -O3 -ffast-math -Wno-missing-braces
+CFLAGS= -I/usr/local/include -Wall -Wextra -std=c99 -pedantic -O3 -ffast-math
 LDFLAGS = -L/usr/local/lib 
 LIBS = -lfftw3 -lm
 
@@ -20,4 +20,4 @@ k9an-wsprd: $(OBJS3)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) $(LIBS)
 
 clean:
-	rm *.o k9an-wsprd wsprsim
+	-rm *.o k9an-wsprd wsprsim
