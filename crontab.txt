@@ -1,0 +1,2 @@
+# Start WSPR Recording at every even minute
+*/2 * * * * /home/pi/wsprcan-master/record

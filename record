@@ -1,0 +1,25 @@
+#!/bin/bash
+# WSPR Audio Recorder Script by DJ0ABR
+# record WSPR signal at every even minute
+# called by cronjob
+
+# number of files in wav folder
+cd /home/pi/wsprcan-master/wav
+file_num=$(ls -1 --file-type | grep -v '/$' | wc -l)
+cd ..
+if [ "$file_num" -le "1" ] ; then
+        DT=$(date -u +"%y%m%d_%H%M")
+	RECFILE=~/wsprcan-master/wav/wspr_${DT}.wav
+        echo recording to ${RECFILE}
+        #arecord -d 114 -f S16_LE -r 12000 -t wav ${RECFILE}
+	rec -V1 -c 1 -t wav ${RECFILE} trim 0 118 &>/dev/null
+	echo "converting sample rate..."
+	sox ${RECFILE} -r 12000 /tmp/out.wav
+	echo removing ${RECFILE}
+	rm ${RECFILE}
+	echo moving /tmp/out.wav to ${RECFILE}
+	mv /tmp/out.wav ${RECFILE}
+        echo "running decode on ${RECFILE}..."
+        ./decode ${DT} &
+fi
+
