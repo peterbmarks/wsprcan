@@ -5,27 +5,31 @@
 # the file wsprd.out contains the current spots in the format for wsprnet.org
 # wsprdsum.out is used as a temporary storage if the upload fails
 
+MYCALL=VK2TPM
+MYGRID=QF56OF
+BASEDIR=/home/pi/wsprcan
+
 echo decoding >> spots
 echo "decoding: /home/pi/wsprcan/wav/wspr_${1}.wav"
 ./k9an-wsprd -f 14.0956 /home/pi/wsprcan/wav/wspr_${1}.wav >>spots
 
 # the wav file is processed, delete it (it should be in a ram disk folder if an SD card is used !)
-rm /home/pi/wsprcan/wav/wspr_${1}.wav
+rm ${BASEDIR}/wav/wspr_${1}.wav
 
 # check if spots are available
-FILESIZE=$(stat -c%s "/home/pi/wsprcan/wspr_spots.txt")
+FILESIZE=$(stat -c%s "${BASEDIR}/wspr_spots.txt")
 echo data size= $FILESIZE >> spots
 if [ $FILESIZE -ne 0 ] ; then
 
         # add the spots to a temporary file used for uploading to wsprnet.org
         echo add to wsprdsum.out >> spots
-        cat /home/pi/wsprcan/wspr_spots.txt >> /home/pi/wsprcan/wsprdsum.out
+        cat ${BASEDIR}/wspr_spots.txt >> ${BASEDIR}/wsprdsum.out
 
         # upload the spots
         echo upload by curl >> spots
         # ping helps curl to contact the DNS server under various conditions, i.e. if the internet connection was lost
         ping -W 2 -c 1 wsprnet.org #> /dev/null;
-        curl -m 8 -F allmept=@/home/pi/wsprcan/wsprdsum.out -F call=VK2TPM -F grid=QF56OF http://wsprnet.org/meptspots.php > /dev/null;
+        curl -m 8 -F allmept=@${BASEDIR}/wsprdsum.out -F call=${MYCALL} -F grid=${MYGRID} http://wsprnet.org/meptspots.php > /dev/null;
         RESULT=$?
 
         # check if curl uploaded the data successfully
