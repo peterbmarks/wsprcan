@@ -1,0 +1,11 @@
+*.o
+*.out
+*.dat
+ALL_WSPR.TXT
+hashtable.txt
+k9an-wsprd
+spots
+wav/
+wspr_spots.txt
+wspr_timer.out
+wsprsim
