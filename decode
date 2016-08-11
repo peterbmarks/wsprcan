@@ -8,10 +8,11 @@
 MYCALL=VK2TPM
 MYGRID=QF56OF
 BASEDIR=/home/pi/wsprcan
+FREQUENCY=3.5926
 
 echo decoding >> spots
-echo "decoding: /home/pi/wsprcan/wav/wspr_${1}.wav"
-./k9an-wsprd -f 14.0956 /home/pi/wsprcan/wav/wspr_${1}.wav >>spots
+echo "decoding: ${BASEDIR}/wav/wspr_${1}.wav"
+./k9an-wsprd -f ${FREQUENCY} ${BASEDIR}/wav/wspr_${1}.wav >>spots
 
 # the wav file is processed, delete it (it should be in a ram disk folder if an SD card is used !)
 rm ${BASEDIR}/wav/wspr_${1}.wav
